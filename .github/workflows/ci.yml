@@ -21,29 +21,41 @@ jobs:
     - name: Setup Python
       uses: actions/setup-python@v4
       with:
-        python-version: 3.10
+        python-version: "3.10"
 
     - name: Install dependencies
       run: pip install -r requirements.txt
 
     - name: Lint
-      run: pip install flake8 && flake8 .
+      run: |
+        pip install flake8
+        flake8 .
 
     - name: Test
-      run: pip install pytest && pytest || true
+      run: |
+        pip install pytest
+        pytest || true
+
+    - name: Install Snyk
+      run: npm install -g snyk
+
+    - name: Snyk Scan
+      run: snyk test
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
     - name: Configure AWS (OIDC)
       uses: aws-actions/configure-aws-credentials@v2
       with:
-        role-to-assume: <YOUR-AWS-ROLE>
-        aws-region: ap-south-1
+        role-to-assume: arn:aws:iam::510931056420:role/github-oidc-role
+        aws-region: ap-south-2
 
     - name: Login to ECR
       run: |
-        aws ecr get-login-password --region ap-south-1 | \
+        aws ecr get-login-password --region ap-south-2 | \
         docker login --username AWS --password-stdin <ECR-URI>
 
-    - name: Build Docker Image
+    - name: Build Image
       run: docker build -t project-2 .
 
     - name: Tag Image
