@@ -58,7 +58,7 @@ jobs:
       run: docker build -t project-2 .
 
     - name: Tag Image
-      run: docker tag project-2:latest <ECR-URI>:${{ github.sha }}
+      run: docker tag project-2:latest 510931056420.dkr.ecr.ap-south-2.amazonaws.com/project-2:${{ github.sha }}
 
     - name: Push Image
-      run: docker push <ECR-URI>:${{ github.sha }}
+      run: docker push 510931056420.dkr.ecr.ap-south-2.amazonaws.com/project-2:${{ github.sha }}
