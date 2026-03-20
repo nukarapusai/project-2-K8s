@@ -2,18 +2,40 @@ name: CD Pipeline
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types: [completed]
+    branches: [dev]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-    - name: SSH to EC2 & Deploy
+    - name: Copy files to EC2
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: 18.61.166.192
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        source: "deployment.yml,service.yml"
+        target: "/home/ubuntu/"
+
+    - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: 18.61.166.192
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          kubectl apply -f deployment.yaml
-          kubectl apply -f service.yaml
+          cd /home/ubuntu
+
+          kubectl apply -f deployment.yml
+          kubectl apply -f service.yml
+
+          IMAGE=510931056420.dkr.ecr.ap-south-2.amazonaws.com/project-2:${{ github.event.workflow_run.head_sha || github.sha }}
+
+          echo "Using image: $IMAGE"
+
+          kubectl set image deployment/project-2 project-2=$IMAGE
