@@ -50,6 +50,21 @@ jobs:
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
+    - name: Validate SonarCloud Config
+      run: |
+        if [ -z "${{ secrets.SONAR_TOKEN }}" ]; then
+          echo "SONAR_TOKEN is missing"
+          exit 1
+        fi
+        if [ -z "${{ secrets.SONAR_ORGANIZATION }}" ]; then
+          echo "SONAR_ORGANIZATION is missing"
+          exit 1
+        fi
+        if [ -z "${{ vars.SONAR_PROJECT_KEY }}" ]; then
+          echo "SONAR_PROJECT_KEY repo variable is missing"
+          exit 1
+        fi
+
     - name: SonarQube Scan
       uses: SonarSource/sonarqube-scan-action@v6
       env:
@@ -58,7 +73,8 @@ jobs:
       with:
         args: >
           -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
-          -Dsonar.projectKey=project-2-k8s
+          -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+          -Dsonar.projectName=${{ vars.SONAR_PROJECT_KEY }}
           -Dsonar.sources=app
 
     - name: SonarQube Quality Gate
