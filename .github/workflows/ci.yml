@@ -51,12 +51,13 @@ jobs:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
     - name: SonarQube Scan
-      uses: SonarSource/sonarqube-scan-action@v4
+      uses: SonarSource/sonarqube-scan-action@v6
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
       with:
         args: >
+          -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
           -Dsonar.projectKey=project-2-k8s
           -Dsonar.sources=app
 
