@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: project-2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: project-2
+  template:
+    metadata:
+      labels:
+        app: project-2
+    spec:
+      containers:
+      - name: project-2
+        image: <ECR-URI>:latest
+        ports:
+        - containerPort: 80

@@ -1,0 +1,124 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [prod]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-scan-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      SONAR_PROJECT_KEY: nukarapusai_project-2-K8s
+      SONAR_ORGANIZATION: nukarapusai
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+
+    - name: Lint
+      run: |
+        pip install flake8
+        flake8 .
+
+    - name: Test
+      run: |
+        pip install pytest
+        PYTHONPATH=. pytest
+
+    - name: Install Snyk
+      run: npm install -g snyk
+
+    - name: Snyk Scan
+      run: snyk test
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+    - name: Validate SonarCloud Config
+      run: |
+        if [ -z "${{ secrets.SONAR_TOKEN }}" ]; then
+          echo "SONAR_TOKEN is missing"
+          exit 1
+        fi
+
+    - name: SonarQube Scan
+      uses: SonarSource/sonarqube-scan-action@v6
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      with:
+        args: >
+          -Dsonar.organization=${{ env.SONAR_ORGANIZATION }}
+          -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
+          -Dsonar.projectName=${{ env.SONAR_PROJECT_KEY }}
+          -Dsonar.sources=app
+
+    - name: SonarQube Quality Gate
+      uses: SonarSource/sonarqube-quality-gate-action@master
+      timeout-minutes: 10
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+    - name: Configure AWS (OIDC)
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        role-to-assume: arn:aws:iam::510931056420:role/OIDC
+        aws-region: ap-south-2
+
+    - name: Login to ECR
+      run: |
+        aws ecr get-login-password --region ap-south-2 | docker login --username AWS --password-stdin 510931056420.dkr.ecr.ap-south-2.amazonaws.com
+
+    - name: Build Image
+      run: docker build -t project-2 .
+
+    - name: Tag Image
+      run: docker tag project-2:latest 510931056420.dkr.ecr.ap-south-2.amazonaws.com/project-2:${{ github.sha }}
+
+    - name: Push Image
+      run: docker push 510931056420.dkr.ecr.ap-south-2.amazonaws.com/project-2:${{ github.sha }}
+
+    - name: Slack Notification (CI Success)
+      if: ${{ success() }}
+      uses: slackapi/slack-github-action@v1.27.0
+      with:
+        payload: |
+          {
+            "text": "CI SUCCESS: ${{ github.repository }} on ${{ github.ref_name }}. Commit: ${{ github.sha }}"
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+    - name: Slack Notification (CI Failure)
+      if: ${{ failure() }}
+      uses: slackapi/slack-github-action@v1.27.0
+      with:
+        payload: |
+          {
+            "text": "CI FAILED: ${{ github.repository }} on ${{ github.ref_name }}. Commit: ${{ github.sha }}"
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
