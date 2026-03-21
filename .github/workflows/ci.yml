@@ -40,7 +40,7 @@ jobs:
     - name: Test
       run: |
         pip install pytest
-        pytest
+        PYTHONPATH=. pytest
 
     - name: Install Snyk
       run: npm install -g snyk
