@@ -6,8 +6,12 @@ on:
   pull_request:
     branches: [prod]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  build-test-scan-and-push:
     runs-on: ubuntu-latest
 
     permissions:
@@ -17,6 +21,8 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
     - name: Setup Python
       uses: actions/setup-python@v4
@@ -34,7 +40,7 @@ jobs:
     - name: Test
       run: |
         pip install pytest
-        pytest || true
+        pytest
 
     - name: Install Snyk
       run: npm install -g snyk
@@ -43,6 +49,23 @@ jobs:
       run: snyk test
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+    - name: SonarQube Scan
+      uses: SonarSource/sonarqube-scan-action@v4
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      with:
+        args: >
+          -Dsonar.projectKey=project-2-k8s
+          -Dsonar.sources=app
+
+    - name: SonarQube Quality Gate
+      uses: SonarSource/sonarqube-quality-gate-action@master
+      timeout-minutes: 10
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
     - name: Configure AWS (OIDC)
       uses: aws-actions/configure-aws-credentials@v2
@@ -62,3 +85,27 @@ jobs:
 
     - name: Push Image
       run: docker push 510931056420.dkr.ecr.ap-south-2.amazonaws.com/project-2:${{ github.sha }}
+
+    - name: Slack Notification (CI Success)
+      if: ${{ success() }}
+      uses: slackapi/slack-github-action@v1.27.0
+      with:
+        payload: |
+          {
+            "text": "CI SUCCESS: ${{ github.repository }} on ${{ github.ref_name }}. Commit: ${{ github.sha }}"
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+    - name: Slack Notification (CI Failure)
+      if: ${{ failure() }}
+      uses: slackapi/slack-github-action@v1.27.0
+      with:
+        payload: |
+          {
+            "text": "CI FAILED: ${{ github.repository }} on ${{ github.ref_name }}. Commit: ${{ github.sha }}"
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
