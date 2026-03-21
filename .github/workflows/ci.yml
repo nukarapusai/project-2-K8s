@@ -56,10 +56,6 @@ jobs:
           echo "SONAR_TOKEN is missing"
           exit 1
         fi
-        if [ -z "${{ secrets.SONAR_ORGANIZATION }}" ]; then
-          echo "SONAR_ORGANIZATION is missing"
-          exit 1
-        fi
         if [ -z "${{ vars.SONAR_PROJECT_KEY }}" ]; then
           echo "SONAR_PROJECT_KEY repo variable is missing"
           exit 1
@@ -72,7 +68,7 @@ jobs:
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
       with:
         args: >
-          -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+          -Dsonar.organization=${{ vars.SONAR_ORGANIZATION || 'nukarapusai' }}
           -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
           -Dsonar.projectName=${{ vars.SONAR_PROJECT_KEY }}
           -Dsonar.sources=app
