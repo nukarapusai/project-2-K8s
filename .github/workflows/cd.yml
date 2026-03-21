@@ -30,7 +30,7 @@ jobs:
     - name: Copy files to EC2
       uses: appleboy/scp-action@v0.1.7
       with:
-        host: 18.61.48.125
+        host: ${{ secrets.EC2_HOST }}
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
         source: "deployment.yml,service.yml"
@@ -39,42 +39,50 @@ jobs:
     - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.0
       with:
-        host: 18.61.48.125
+        host: ${{ secrets.EC2_HOST }}
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           cd /home/ubuntu
 
+          # Ensure namespace exists
           kubectl get namespace ${{ github.event.inputs.target_environment }} >/dev/null 2>&1 || kubectl create namespace ${{ github.event.inputs.target_environment }}
 
+          # Apply configs
           kubectl apply -n ${{ github.event.inputs.target_environment }} -f deployment.yml
           kubectl apply -n ${{ github.event.inputs.target_environment }} -f service.yml
 
+          # Set image
           IMAGE=510931056420.dkr.ecr.ap-south-2.amazonaws.com/project-2:${{ github.event.inputs.image_tag }}
 
           echo "Using image: $IMAGE"
 
           kubectl set image -n ${{ github.event.inputs.target_environment }} deployment/project-2 project-2=$IMAGE
 
+          # Verify rollout
+          kubectl rollout status deployment/project-2 -n ${{ github.event.inputs.target_environment }}
+
+    # ✅ SLACK SUCCESS
     - name: Slack Notification (CD Success)
       if: ${{ success() }}
       uses: slackapi/slack-github-action@v1.27.0
       with:
         payload: |
           {
-            "text": "CD SUCCESS: ${{ github.repository }} deployed to ${{ github.event.inputs.target_environment }} with image tag ${{ github.event.inputs.image_tag }}"
+            "text": "🚀 *Deployment SUCCESS*\nProject: ${{ github.repository }}\nEnvironment: ${{ github.event.inputs.target_environment }}\nImage: ${{ github.event.inputs.image_tag }}\nStatus: Healthy ✅"
           }
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
+    # ❌ SLACK FAILURE
     - name: Slack Notification (CD Failure)
       if: ${{ failure() }}
       uses: slackapi/slack-github-action@v1.27.0
       with:
         payload: |
           {
-            "text": "CD FAILED: ${{ github.repository }} deployment to ${{ github.event.inputs.target_environment }} failed for image tag ${{ github.event.inputs.image_tag }}"
+            "text": "❌ *Deployment FAILED*\nProject: ${{ github.repository }}\nEnvironment: ${{ github.event.inputs.target_environment }}\nImage: ${{ github.event.inputs.image_tag }}\nAction Required: Check logs immediately ⚠️"
           }
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
